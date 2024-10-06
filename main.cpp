@@ -32,6 +32,7 @@ const int PAUSE_BUTTON_SIZE = 30;
 const int STEP_BUTTON_SIZE = 20;
 const int PAUSE_BUTTON_Y_OFFSET = 5;
 const int BUTTON_SPACING = 10;
+const int STEP_ICON_SIZE = 12;
 
 class GameOfLife {
 private:
@@ -157,16 +158,25 @@ public:
 };
 
 class Button {
+public:
+    enum class Type { PlayPause, StepForward, StepBackward };
+
 private:
     sf::RectangleShape shape;
     sf::ConvexShape playIcon;
     sf::RectangleShape pauseIcon[2];
+    sf::RectangleShape stepForwardIconLine;
+    sf::ConvexShape stepForwardIconTriangle;
+    sf::RectangleShape stepBackwardIconLine;
+    sf::ConvexShape stepBackwardIconTriangle;
     std::function<void()> callback;
     bool isPaused;
+    Type buttonType;
 
 public:
-    Button(const sf::Vector2f& position, const sf::Vector2f& size, std::function<void()> cb)
-        : callback(cb), isPaused(true) {
+    Button(const sf::Vector2f& position, const sf::Vector2f& size, std::function<void()> cb,
+           Type type)
+        : callback(cb), isPaused(true), buttonType(type) {
         shape.setPosition(position);
         shape.setSize(size);
         shape.setFillColor(BUTTON_FILL_COLOR);
@@ -188,15 +198,62 @@ public:
             pauseIcon[i].setPosition(position.x + size.x * (0.3f + i * 0.25f),
                                      position.y + size.y * 0.2f);
         }
+
+        // Set up step forward icon (|>)
+        {
+            // Vertical line
+            stepForwardIconLine.setSize(sf::Vector2f(size.x * 0.15f, size.y * 0.6f));
+            stepForwardIconLine.setFillColor(BUTTON_TEXT_COLOR);
+            stepForwardIconLine.setPosition(position.x + size.x * 0.2f, position.y + size.y * 0.2f);
+
+            // Triangle
+            stepForwardIconTriangle.setPointCount(3);
+            stepForwardIconTriangle.setPoint(0, sf::Vector2f(size.x * 0.45f, size.y * 0.2f));
+            stepForwardIconTriangle.setPoint(1, sf::Vector2f(size.x * 0.45f, size.y * 0.8f));
+            stepForwardIconTriangle.setPoint(2, sf::Vector2f(size.x * 0.8f, size.y * 0.5f));
+            stepForwardIconTriangle.setFillColor(BUTTON_TEXT_COLOR);
+            stepForwardIconTriangle.setPosition(position);
+        }
+
+        // Set up step backward icon (<|)
+        {
+            // Vertical line
+            stepBackwardIconLine.setSize(sf::Vector2f(size.x * 0.15f, size.y * 0.6f));
+            stepBackwardIconLine.setFillColor(BUTTON_TEXT_COLOR);
+            stepBackwardIconLine.setPosition(position.x + size.x * 0.65f,
+                                             position.y + size.y * 0.2f);
+
+            // Triangle
+            stepBackwardIconTriangle.setPointCount(3);
+            stepBackwardIconTriangle.setPoint(0, sf::Vector2f(size.x * 0.55f, size.y * 0.2f));
+            stepBackwardIconTriangle.setPoint(1, sf::Vector2f(size.x * 0.55f, size.y * 0.8f));
+            stepBackwardIconTriangle.setPoint(2, sf::Vector2f(size.x * 0.2f, size.y * 0.5f));
+            stepBackwardIconTriangle.setFillColor(BUTTON_TEXT_COLOR);
+            stepBackwardIconTriangle.setPosition(position);
+        }
     }
 
     void draw(sf::RenderWindow& window) {
         window.draw(shape);
-        if (isPaused) {
-            window.draw(playIcon);
-        } else {
-            window.draw(pauseIcon[0]);
-            window.draw(pauseIcon[1]);
+        switch (buttonType) {
+            case Type::PlayPause:
+                if (isPaused) {
+                    window.draw(playIcon);
+                } else {
+                    window.draw(pauseIcon[0]);
+                    window.draw(pauseIcon[1]);
+                }
+                break;
+            case Type::StepForward:
+                window.draw(stepForwardIconLine);
+                window.draw(stepForwardIconTriangle);
+                break;
+            case Type::StepBackward:
+                window.draw(stepBackwardIconLine);
+                window.draw(stepBackwardIconTriangle);
+                break;
+            default:
+                break;
         }
     }
 
@@ -205,14 +262,15 @@ public:
                                                 static_cast<float>(mousePos.y));
     }
 
-    void togglePausePlay() { isPaused = !isPaused; }
-
     void click() {
         if (callback) {
             callback();
         }
-        togglePausePlay();
     }
+
+    void setPaused(bool paused) { isPaused = paused; }
+
+    bool getPaused() const { return isPaused; }
 };
 
 int main() {
@@ -227,15 +285,29 @@ int main() {
     sf::Clock clock;
 
     Button pausePlayButton(
-        sf::Vector2f(
-            (GRID_WIDTH * CELL_SIZE - PAUSE_BUTTON_SIZE - STEP_BUTTON_SIZE - BUTTON_SPACING) / 2,
-            GRID_HEIGHT * CELL_SIZE + PAUSE_BUTTON_Y_OFFSET),
-        sf::Vector2f(PAUSE_BUTTON_SIZE, PAUSE_BUTTON_SIZE), [&game]() { game.togglePause(); });
+        sf::Vector2f((GRID_WIDTH * CELL_SIZE - PAUSE_BUTTON_SIZE) / 2,
+                     GRID_HEIGHT * CELL_SIZE + PAUSE_BUTTON_Y_OFFSET),
+        sf::Vector2f(PAUSE_BUTTON_SIZE, PAUSE_BUTTON_SIZE),
+        [&game, &pausePlayButton]() {
+            game.togglePause();
+            pausePlayButton.setPaused(game.getPaused());
+        },
+        Button::Type::PlayPause);
 
     Button stepForwardButton(
-        sf::Vector2f((GRID_WIDTH * CELL_SIZE + PAUSE_BUTTON_SIZE + BUTTON_SPACING) / 2,
-                     GRID_HEIGHT * CELL_SIZE + PAUSE_BUTTON_Y_OFFSET),
-        sf::Vector2f(STEP_BUTTON_SIZE, STEP_BUTTON_SIZE), [&game]() { game.stepForward(); });
+        sf::Vector2f((GRID_WIDTH * CELL_SIZE + PAUSE_BUTTON_SIZE) / 2 + BUTTON_SPACING,
+                     GRID_HEIGHT * CELL_SIZE + PAUSE_BUTTON_Y_OFFSET +
+                         (PAUSE_BUTTON_SIZE - STEP_BUTTON_SIZE) / 2),
+        sf::Vector2f(STEP_BUTTON_SIZE, STEP_BUTTON_SIZE), [&game]() { game.stepForward(); },
+        Button::Type::StepForward);
+
+    Button stepBackwardButton(
+        sf::Vector2f(
+            (GRID_WIDTH * CELL_SIZE - PAUSE_BUTTON_SIZE) / 2 - BUTTON_SPACING - STEP_BUTTON_SIZE,
+            GRID_HEIGHT * CELL_SIZE + PAUSE_BUTTON_Y_OFFSET +
+                (PAUSE_BUTTON_SIZE - STEP_BUTTON_SIZE) / 2),
+        sf::Vector2f(STEP_BUTTON_SIZE, STEP_BUTTON_SIZE), [&game]() { game.stepBackward(); },
+        Button::Type::StepBackward);
 
     bool drawMode = true;  // True for drawing, false for erasing
 
@@ -245,10 +317,15 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 window.close();
             } else if (event.type == sf::Event::KeyPressed) {
-                if (event.key.code == sf::Keyboard::Space) {
+                if (event.key.code == sf::Keyboard::R) {
                     game.randomizeGrid();
-                } else if (event.key.code == sf::Keyboard::P) {
+                } else if (event.key.code == sf::Keyboard::Space) {
                     game.togglePause();
+                    pausePlayButton.setPaused(game.getPaused());
+                } else if (event.key.code == sf::Keyboard::Left) {
+                    game.stepBackward();
+                } else if (event.key.code == sf::Keyboard::Right) {
+                    game.stepForward();
                 }
             } else if (event.type == sf::Event::MouseButtonPressed) {
                 if (event.mouseButton.button == sf::Mouse::Left) {
@@ -257,6 +334,8 @@ int main() {
                         pausePlayButton.click();
                     } else if (stepForwardButton.isMouseOver(mousePos)) {
                         stepForwardButton.click();
+                    } else if (stepBackwardButton.isMouseOver(mousePos)) {
+                        stepBackwardButton.click();
                     } else {
                         int x = event.mouseButton.x / CELL_SIZE;
                         int y = event.mouseButton.y / CELL_SIZE;
@@ -285,6 +364,7 @@ int main() {
         game.draw(window);
         pausePlayButton.draw(window);
         stepForwardButton.draw(window);
+        stepBackwardButton.draw(window);
         window.display();
     }
 
