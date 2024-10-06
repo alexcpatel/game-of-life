@@ -1,4 +1,5 @@
- .clang-format
- .vscode/
- main
- *.dSYM
+.clang-format
+.vscode/
+main
+*.dSYM*
+build*
