@@ -11,6 +11,11 @@ const int GRID_WIDTH = 64;
 const int GRID_HEIGHT = 48;
 const sf::Time STEP_TIME = sf::seconds(0.1f);
 const int NAV_BAR_HEIGHT = 40;
+const std::vector<float> SPEED_MULTIPLIERS = {1.0f, 2.0f, 4.0f, 8.0f};
+const int SPEED_DISPLAY_SIZE = 30;
+const int SPEED_DISPLAY_MARGIN = 10;
+const float INITIAL_ALIVE_PROBABILITY = 0.25f;
+const int FRAMERATE_LIMIT = 60;
 
 // UI constants
 const int BUTTON_WIDTH = 80;
@@ -18,6 +23,11 @@ const int BUTTON_HEIGHT = 30;
 const int BUTTON_MARGIN = 10;
 const int BUTTON_TEXT_SIZE = 18;
 const int HISTORY_LIMIT = 10000;
+const int PAUSE_BUTTON_SIZE = 30;
+const int STEP_BUTTON_SIZE = 20;
+const int PAUSE_BUTTON_Y_OFFSET = 5;
+const int BUTTON_SPACING = 10;
+const int STEP_ICON_SIZE = 12;
 
 // Color constants
 const sf::Color BUTTON_FILL_COLOR(100, 100, 100);
@@ -26,18 +36,7 @@ const sf::Color BUTTON_TEXT_COLOR = sf::Color::White;
 const sf::Color CELL_COLOR = sf::Color::White;
 const sf::Color BACKGROUND_COLOR = sf::Color::Black;
 const sf::Color NAV_BAR_COLOR(50, 50, 50);
-
-// Add these to the UI constants section
-const int PAUSE_BUTTON_SIZE = 30;
-const int STEP_BUTTON_SIZE = 20;
-const int PAUSE_BUTTON_Y_OFFSET = 5;
-const int BUTTON_SPACING = 10;
-const int STEP_ICON_SIZE = 12;
-
-// Add these constants
-const std::vector<float> SPEED_MULTIPLIERS = {1.0f, 2.0f, 4.0f, 8.0f};
-const int SPEED_DISPLAY_SIZE = 30;
-const int SPEED_DISPLAY_MARGIN = 10;
+const sf::Color INACTIVE_SPEED_BAR_COLOR(100, 100, 100);
 
 class GameOfLife {
 private:
@@ -61,7 +60,7 @@ public:
     void randomizeGrid() {
         for (int y = 0; y < GRID_HEIGHT; ++y) {
             for (int x = 0; x < GRID_WIDTH; ++x) {
-                grid[y][x] = (rand() % 4 == 0);  // 25% chance of being alive
+                grid[y][x] = (static_cast<float>(rand()) / RAND_MAX < INITIAL_ALIVE_PROBABILITY);
             }
         }
     }
@@ -139,6 +138,8 @@ public:
     }
 
     void togglePause() { isPaused = !isPaused; }
+
+    void setPaused(bool paused) { isPaused = paused; }
 
     bool getPaused() const { return isPaused; }
 
@@ -296,7 +297,6 @@ public:
     bool getPaused() const { return isPaused; }
 };
 
-// Add this new class after the Button class
 class SpeedDisplay {
 private:
     sf::RectangleShape shape;
@@ -323,7 +323,7 @@ public:
             if (i <= speedMultiplierIndex) {
                 speedBar.setFillColor(BUTTON_TEXT_COLOR);
             } else {
-                speedBar.setFillColor(sf::Color(100, 100, 100));  // Dimmed color for inactive bars
+                speedBar.setFillColor(INACTIVE_SPEED_BAR_COLOR);
             }
 
             window.draw(speedBar);
@@ -342,7 +342,7 @@ int main() {
     sf::RenderWindow window(
         sf::VideoMode(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE + NAV_BAR_HEIGHT),
         "Conway's Game of Life");
-    window.setFramerateLimit(60);
+    window.setFramerateLimit(FRAMERATE_LIMIT);
 
     GameOfLife game;
     sf::Clock clock;
@@ -393,6 +393,8 @@ int main() {
                 } else if (event.key.code == sf::Keyboard::Left) {
                     game.stepBackward();
                 } else if (event.key.code == sf::Keyboard::Right) {
+                    game.setPaused(true);
+                    pausePlayButton.setPaused(true);
                     game.stepForward();
                 } else if (event.key.code == sf::Keyboard::C) {
                     game.clearGrid();
@@ -405,6 +407,8 @@ int main() {
                     if (pausePlayButton.isMouseOver(mousePos)) {
                         pausePlayButton.click();
                     } else if (stepForwardButton.isMouseOver(mousePos)) {
+                        game.setPaused(true);
+                        pausePlayButton.setPaused(true);
                         stepForwardButton.click();
                     } else if (stepBackwardButton.isMouseOver(mousePos)) {
                         stepBackwardButton.click();
