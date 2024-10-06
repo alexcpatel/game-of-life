@@ -34,6 +34,11 @@ const int PAUSE_BUTTON_Y_OFFSET = 5;
 const int BUTTON_SPACING = 10;
 const int STEP_ICON_SIZE = 12;
 
+// Add these constants
+const std::vector<float> SPEED_MULTIPLIERS = {1.0f, 2.0f, 4.0f, 8.0f};
+const int SPEED_DISPLAY_SIZE = 30;
+const int SPEED_DISPLAY_MARGIN = 10;
+
 class GameOfLife {
 private:
     std::vector<std::vector<bool>> grid;
@@ -41,13 +46,15 @@ private:
     std::deque<std::vector<std::vector<bool>>> history;
     bool isPaused;
     bool isMouseDown;
+    int speedMultiplierIndex;
 
 public:
     GameOfLife()
         : grid(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false)),
           nextGrid(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false)),
           isPaused(true),
-          isMouseDown(false) {
+          isMouseDown(false),
+          speedMultiplierIndex(0) {
         randomizeGrid();
     }
 
@@ -155,6 +162,22 @@ public:
             grid[y][x] = state;
         }
     }
+
+    void clearGrid() {
+        for (int y = 0; y < GRID_HEIGHT; ++y) {
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                grid[y][x] = false;
+            }
+        }
+    }
+
+    void toggleSpeedMultiplier() {
+        speedMultiplierIndex = (speedMultiplierIndex + 1) % SPEED_MULTIPLIERS.size();
+    }
+
+    float getSpeedMultiplier() const { return SPEED_MULTIPLIERS[speedMultiplierIndex]; }
+
+    int getSpeedMultiplierIndex() const { return speedMultiplierIndex; }
 };
 
 class Button {
@@ -273,6 +296,46 @@ public:
     bool getPaused() const { return isPaused; }
 };
 
+// Add this new class after the Button class
+class SpeedDisplay {
+private:
+    sf::RectangleShape shape;
+
+public:
+    SpeedDisplay(const sf::Vector2f& position, const sf::Vector2f& size) {
+        shape.setPosition(position);
+        shape.setSize(size);
+    }
+
+    void draw(sf::RenderWindow& window, int speedMultiplierIndex) {
+        const int maxSpeed = SPEED_MULTIPLIERS.size();
+        const float barWidth = shape.getSize().x * 0.8f;
+        const float barHeight = 5.0f;
+        const float barSpacing = barWidth / (maxSpeed * 2 - 1);
+        const float startX = shape.getPosition().x + (shape.getSize().x - barWidth) / 2;
+        const float startY = shape.getPosition().y + shape.getSize().y / 2 - barHeight / 2;
+
+        for (int i = 0; i < maxSpeed; ++i) {
+            sf::RectangleShape speedBar;
+            speedBar.setSize(sf::Vector2f(barWidth / maxSpeed - barSpacing, barHeight));
+            speedBar.setPosition(startX + i * (barWidth / maxSpeed), startY);
+
+            if (i <= speedMultiplierIndex) {
+                speedBar.setFillColor(BUTTON_TEXT_COLOR);
+            } else {
+                speedBar.setFillColor(sf::Color(100, 100, 100));  // Dimmed color for inactive bars
+            }
+
+            window.draw(speedBar);
+        }
+    }
+
+    bool isMouseOver(const sf::Vector2i& mousePos) const {
+        return shape.getGlobalBounds().contains(static_cast<float>(mousePos.x),
+                                                static_cast<float>(mousePos.y));
+    }
+};
+
 int main() {
     srand(static_cast<unsigned>(time(nullptr)));
 
@@ -309,6 +372,11 @@ int main() {
         sf::Vector2f(STEP_BUTTON_SIZE, STEP_BUTTON_SIZE), [&game]() { game.stepBackward(); },
         Button::Type::StepBackward);
 
+    SpeedDisplay speedDisplay(
+        sf::Vector2f(GRID_WIDTH * CELL_SIZE - SPEED_DISPLAY_SIZE - SPEED_DISPLAY_MARGIN,
+                     GRID_HEIGHT * CELL_SIZE + SPEED_DISPLAY_MARGIN),
+        sf::Vector2f(SPEED_DISPLAY_SIZE, SPEED_DISPLAY_SIZE));
+
     bool drawMode = true;  // True for drawing, false for erasing
 
     while (window.isOpen()) {
@@ -326,6 +394,10 @@ int main() {
                     game.stepBackward();
                 } else if (event.key.code == sf::Keyboard::Right) {
                     game.stepForward();
+                } else if (event.key.code == sf::Keyboard::C) {
+                    game.clearGrid();
+                } else if (event.key.code == sf::Keyboard::S) {
+                    game.toggleSpeedMultiplier();
                 }
             } else if (event.type == sf::Event::MouseButtonPressed) {
                 if (event.mouseButton.button == sf::Mouse::Left) {
@@ -336,6 +408,8 @@ int main() {
                         stepForwardButton.click();
                     } else if (stepBackwardButton.isMouseOver(mousePos)) {
                         stepBackwardButton.click();
+                    } else if (speedDisplay.isMouseOver(mousePos)) {
+                        game.toggleSpeedMultiplier();
                     } else {
                         int x = event.mouseButton.x / CELL_SIZE;
                         int y = event.mouseButton.y / CELL_SIZE;
@@ -355,7 +429,7 @@ int main() {
             }
         }
 
-        if (clock.getElapsedTime() >= STEP_TIME) {
+        if (clock.getElapsedTime() >= STEP_TIME / game.getSpeedMultiplier()) {
             game.update();
             clock.restart();
         }
@@ -365,6 +439,7 @@ int main() {
         pausePlayButton.draw(window);
         stepForwardButton.draw(window);
         stepBackwardButton.draw(window);
+        speedDisplay.draw(window, game.getSpeedMultiplierIndex());
         window.display();
     }
 
